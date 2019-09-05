@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+raytracing.so
+raytracing.dylib
+raytracing.dll
+raytracing.a
+raytracing.lib
+raytracing-test-*
+*.exe
+*.o
+*.obj
+*.lst
+*.sublime*
+*.sln
+*.png
