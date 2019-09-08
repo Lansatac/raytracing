@@ -4,10 +4,13 @@
 	],
 	"copyright": "Copyright © 2019, jyegge",
 	"dependencies": {
-		"gl3n": "~>1.3.1",
-		"imaged": "~>1.0.2"
+		"derelict-sdl2": "~>2.1.4",
+		"gl3n": "~>1.3.1"
 	},
 	"description": "A minimal D application.",
 	"license": "proprietary",
-	"name": "raytracing"
+	"name": "raytracing",
+	"versions": [
+		"DerelictGL3_Contexts"
+	]
 }
