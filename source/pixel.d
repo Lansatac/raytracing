@@ -6,7 +6,7 @@ unittest
     import std.format : format;
 
     assert(PackedPixelRGBA(vec3(0,0,1)) == 0x0000FFFF,
-        format("Expected %#X, but it was %#X", 0x0000FFFF, PackedPixel(vec3(0,0,1))));
+        format("Expected %#X, but it was %#X", 0x0000FFFF, PackedPixelRGBA(vec3(0,0,1))));
     assert(PackedPixelRGBA(vec3(0,1,0)) == 0x00FF00FF);
     assert(PackedPixelRGBA(vec3(1,0,0)) == 0xFF0000FF);
     assert(PackedPixelRGBA(vec3(1,1,1)) == 0xFFFFFFFF);

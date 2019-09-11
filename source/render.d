@@ -12,7 +12,7 @@ import sphere;
 //[comment]
 // This variable controls the maximum recursion depth
 //[/comment]
-enum MAX_RAY_DEPTH = 5;
+enum MAX_RAY_DEPTH = 2;
 
 float mix(const float a, const float b, const float mix)
 {
@@ -29,11 +29,7 @@ float mix(const float a, const float b, const float mix)
 // is the color of the object at the intersection point, otherwise it returns
 // the background color.
 //[/comment]
-vec3 trace(
-    const vec3 rayorig,
-    const vec3 raydir,
-    const sphere[] spheres,
-    const int depth)
+vec3 trace(const vec3 rayorig, const vec3 raydir, const sphere[] spheres, const int depth)
 {
     import std.typecons;
 
@@ -41,12 +37,15 @@ vec3 trace(
     float tnear = float.infinity;
     Nullable!sphere sphere;
     // find intersection of this ray with the sphere in the scene
-    for (uint i = 0; i < spheres.length; ++i) {
+    for (uint i = 0; i < spheres.length; ++i)
+    {
         float t0 = float.infinity, t1 = float.infinity;
         if (spheres[i].intersect(rayorig, raydir, t0, t1))
         {
-            if (t0 < 0) t0 = t1;
-            if (t0 < tnear) {
+            if (t0 < 0)
+                t0 = t1;
+            if (t0 < tnear)
+            {
                 tnear = t0;
                 sphere = spheres[i];
             }
@@ -54,9 +53,9 @@ vec3 trace(
     }
     // if there's no intersection return black or background color
     if (sphere.isNull)
-    	return vec3(0.4, 0.4, 1);
+        return vec3(0.4, 0.4, 1);
 
-    vec3 surfaceColor = vec3(0f,0f,0f); // color of the ray/surfaceof the object intersected by the ray
+    vec3 surfaceColor = vec3(0f, 0f, 0f); // color of the ray/surfaceof the object intersected by the ray
     vec3 phit = rayorig + raydir * tnear; // point of intersection
     vec3 nhit = phit - sphere.center; // normal at the intersection point
     nhit.normalize(); // normalize normal direction
@@ -71,7 +70,8 @@ vec3 trace(
         nhit = -nhit;
         inside = true;
     }
-    if ((sphere.transparency > 0 || sphere.reflection > 0) && depth < MAX_RAY_DEPTH) {
+    if ((sphere.transparency > 0 || sphere.reflection > 0) && depth < MAX_RAY_DEPTH)
+    {
         float facingratio = -raydir.dot(nhit);
         // change the mix value to tweak the effect
         float fresneleffect = mix(pow(1 - facingratio, 3), 1, 0.1);
@@ -82,11 +82,12 @@ vec3 trace(
         vec3 reflection = trace(phit + nhit * bias, refldir, spheres, depth + 1);
         vec3 refraction = 0;
         // if the sphere is also transparent compute refraction ray (transmission)
-        if (sphere.transparency) {
+        if (sphere.transparency)
+        {
             float ior = 1.1, eta = (inside) ? ior : 1 / ior; // are we inside or outside the surface?
             float cosi = -nhit.dot(raydir);
             float k = 1 - eta * eta * (1 - cosi * cosi);
-            vec3 refrdir = raydir * eta + nhit.scale(eta *  cosi - sqrt(k));
+            vec3 refrdir = raydir * eta + nhit.scale(eta * cosi - sqrt(k));
             refrdir.normalize();
             refraction = trace(phit - nhit * bias, refrdir, spheres, depth + 1);
         }
@@ -104,39 +105,54 @@ vec3 trace(
         surfaceColor = finalColor;
         //surfaceColor = refraction * vec3(sphere.transparency) + sphere.surfaceColor;
     }
-    else {
+    else
+    {
         // it's a diffuse object, no need to raytrace any further
-        for (uint i = 0; i < spheres.length; ++i) {
-            if (spheres[i].emissionColor.x > 0) {
+        for (uint i = 0; i < spheres.length; ++i)
+        {
+            if (spheres[i].emissionColor.x > 0)
+            {
                 // this is a light
                 vec3 transmission = vec3(1, 1, 1);
                 vec3 lightDirection = spheres[i].center - phit;
                 lightDirection.normalize();
-                for (uint j = 0; j < spheres.length; ++j) {
-                    if (i != j) {
+                for (uint j = 0; j < spheres.length; ++j)
+                {
+                    if (i != j)
+                    {
                         float t0, t1;
-                        if (spheres[j].intersect(phit + nhit * bias, lightDirection, t0, t1)) {
-                            transmission = vec3(0,0,0);
+                        if (spheres[j].intersect(phit + nhit * bias, lightDirection, t0, t1))
+                        {
+                            transmission = vec3(0, 0, 0);
                             break;
                         }
                     }
                 }
-                surfaceColor += sphere.surfaceColor.scale(transmission).scale(
-                std.math.fmax(0, nhit.dot(lightDirection))).scale(spheres[i].emissionColor);
+
+                if (transmission.length_squared > 0)
+                {
+                    auto calculatedColor = sphere.surfaceColor.scale(transmission)
+                        .scale(std.math.fmax(0, nhit.dot(lightDirection))).scale(
+                                spheres[i].emissionColor);
+                    surfaceColor += calculatedColor;
+                }
             }
         }
     }
 
+    surfaceColor = surfaceColor.clamp01();
     return surfaceColor + sphere.emissionColor;
+}
+
+vec3 clamp01(vec3 clamped)
+{
+    import std.algorithm;
+    return vec3(clamped.x.clamp(0,1), clamped.y.clamp(0,1), clamped.z.clamp(0,1));
 }
 
 vec3 scale(vec3 lhs, vec3 rhs)
 {
-    return vec3(
-        lhs.x * rhs.x,
-        lhs.y * rhs.y,
-        lhs.z * rhs.z
-        );
+    return vec3(lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z);
 }
 
 vec3 scale(vec3 lhs, float rhs)
@@ -153,31 +169,58 @@ vec3[] render(const sphere[] spheres, uint width, uint height)
 {
     import std.parallelism;
     import std.algorithm;
+    import std.range;
 
-    float invWidth = 1f / cast(float)(width);
-    float invHeight = 1f / cast(float)(height);
-    float fov = 30f;
-    float aspectratio = width / cast(float)(height);
-    float angle = tan(PI * 0.5f * fov / 180f);
+    immutable float invWidth = 1f / cast(float)(width);
+    immutable float invHeight = 1f / cast(float)(height);
+    immutable float fov = 30f;
+    immutable float aspectratio = width / cast(float)(height);
+    immutable float angle = tan(PI * 0.5f * fov / 180f);
 
-    Tuple!(uint, "Index", vec3, "Ray")[] rays;
-    // Trace rays
-    uint i = 0;
-    for (uint y = 0; y < height; ++y) {
-        for (uint x = 0; x < width; ++x, ++i) {
-            float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
-            float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
-            vec3 raydir = vec3(xx, yy, -1);
-            raydir.normalize();
-            rays ~= tuple!("Index", "Ray")(i, raydir);
-        }
-    }
-    auto rayCats = std.algorithm.map!(r=>tuple(r.Index, trace(vec3(0), r.Ray, spheres, 0)))(rays);
+    import std.functional;
+
+    alias getRay = partial!(partial!(partial!(partial!(partial!(getRayForCoordinate,
+            width), invWidth), invHeight), aspectratio), angle);
+
+    auto rays = 
+        coordinates(width, height)
+        .map!(getRay)
+        .map!(r => tuple(r.Index, trace(vec3(0), r.Ray, spheres, 0)));
 
     vec3[] image = new vec3[width * height];
-    foreach(raycast; parallel(rayCats))
+    foreach (raycast; parallel(rays))
     {
         image[raycast[0]] = raycast[1];
     }
     return image;
+}
+
+auto getRayForCoordinate(int width, float invWidth, float invHeight,
+        float aspectratio, float angle, vec2i coord)
+{
+    int x = coord.x;
+    int y = coord.y;
+    float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
+    float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
+    vec3 raydir = vec3(xx, yy, -1);
+    raydir.normalize();
+    return tuple!("Index", "Ray")(x + y * width, raydir);
+}
+
+unittest
+{
+    import std.range : array;
+    import std.format : format;
+
+    vec2i[] coords = coordinates(2, 2).array;
+    vec2i[] expected = [vec2i(0, 0), vec2i(1, 0), vec2i(0, 1), vec2i(1, 1)];
+    assert(coords == expected, format("Expected %s but got %s instead.", expected, coords));
+}
+
+auto coordinates(uint width, uint height)
+{
+    import std.algorithm : map, joiner;
+    import std.range : iota;
+
+    return iota(height).map!(y => iota(width).map!(x => vec2i(x, y))).joiner();
 }
