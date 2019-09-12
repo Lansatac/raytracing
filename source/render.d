@@ -11,10 +11,28 @@ import gl3n.linalg;
 
 import sphere;
 
-//[comment]
-// This variable controls the maximum recursion depth
-//[/comment]
 enum MAX_RAY_DEPTH = 2;
+
+
+auto render(Spheres)(const RenderOptions options, const Spheres spheres, uint width, uint height)
+{
+
+    immutable float invWidth = 1f / cast(float)(width);
+    immutable float invHeight = 1f / cast(float)(height);
+    immutable float fov = 30f;
+    immutable float aspectratio = width / cast(float)(height);
+    immutable float angle = tan(PI * 0.5f * fov / 180f);
+
+    import std.functional;
+
+    alias getRay = partial!(partial!(partial!(partial!(partial!(getRayForCoordinate,
+            width), invWidth), invHeight), aspectratio), angle);
+
+    auto rays = coordinates(width, height).map!(getRay)
+        .map!(r => tuple(r.Index, trace(options, vec3(0), r.Ray, spheres, 0)));
+
+    return rays;
+}
 
 float mix(const float a, const float b, const float mix)
 {
@@ -99,28 +117,27 @@ vec3 trace(const RenderOptions options, const vec3 rayorig, const vec3 raydir, c
         auto sphereLights = spheres.filter!(s=>s.emissionColor.x > 0);
         foreach(light; sphereLights)
         {
-            vec3 transmission = vec3(1, 1, 1);
+            bool transmission = true;
             vec3 lightDirection = light.center - phit;
             lightDirection.normalize();
             for (uint j = 0; j < spheres.length; ++j)
             {
                 if (light != spheres[j])
                 {
-                    float t0, t1;
                     auto intersection = intersect(phit + nhit * bias,
                             lightDirection, spheres[j]);
                     if (intersection.Hit)
                     {
-                        transmission = vec3(0, 0, 0);
+                        transmission = false;
                         break;
                     }
                 }
             }
 
-            if (transmission.length_squared > 0)
+            if (transmission)
             {
-                auto calculatedColor = sphere.surfaceColor.scale(std.math.fmax(0,
-                        nhit.dot(lightDirection))).scale(light.emissionColor);
+                auto lightIntensity = std.math.fmax(0, nhit.dot(lightDirection));
+                auto calculatedColor = sphere.surfaceColor.scale(lightIntensity).scale(light.emissionColor);
                 surfaceColor += calculatedColor;
             }
         }
@@ -147,39 +164,6 @@ vec3 scale(vec3 lhs, vec3 rhs)
 vec3 scale(vec3 lhs, float rhs)
 {
     return lhs * rhs;
-}
-
-//[comment]
-// Main rendering function. We compute a camera ray for each pixel of the image
-// trace it and return a color. If the ray hits a sphere, we return the color of the
-// sphere at the intersection point, else we return the background color.
-//[/comment]
-vec3[] render(Spheres)(const RenderOptions options, const Spheres spheres, uint width, uint height)
-{
-    import std.parallelism;
-    import std.algorithm;
-    import std.range;
-
-    immutable float invWidth = 1f / cast(float)(width);
-    immutable float invHeight = 1f / cast(float)(height);
-    immutable float fov = 30f;
-    immutable float aspectratio = width / cast(float)(height);
-    immutable float angle = tan(PI * 0.5f * fov / 180f);
-
-    import std.functional;
-
-    alias getRay = partial!(partial!(partial!(partial!(partial!(getRayForCoordinate,
-            width), invWidth), invHeight), aspectratio), angle);
-
-    auto rays = coordinates(width, height).map!(getRay)
-        .map!(r => tuple(r.Index, trace(options, vec3(0), r.Ray, spheres, 0)));
-
-    vec3[] image = new vec3[width * height];
-    foreach (raycast; (rays))
-    {
-        image[raycast[0]] = raycast[1];
-    }
-    return image;
 }
 
 auto getRayForCoordinate(int width, float invWidth, float invHeight,

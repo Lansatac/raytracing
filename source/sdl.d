@@ -7,7 +7,6 @@ import derelict.sdl2.sdl;
 import derelict.sdl2.image;
 import derelict.sdl2.ttf;
 
-
 import render;
 import pixel;
 
@@ -50,6 +49,8 @@ int run(GetPixels)(int width, int height, GetPixels getPixels)
 
     RenderOptions options;
 
+    uint[] buffer = new uint[width * height];
+
     SDL_Event e;
     bool quit = false;
     while (!quit)
@@ -62,7 +63,7 @@ int run(GetPixels)(int width, int height, GetPixels getPixels)
             }
             if (e.type == SDL_KEYDOWN)
             {
-                switch( e.key.keysym.sym )
+                switch (e.key.keysym.sym)
                 {
                 case SDLK_ESCAPE:
                     quit = true;
@@ -70,22 +71,27 @@ int run(GetPixels)(int width, int height, GetPixels getPixels)
                 case SDLK_l:
                     options.lighting = !options.lighting;
                     break;
-                case  SDLK_r:
+                case SDLK_r:
                     options.reflections = !options.reflections;
                     break;
                 case SDLK_t:
                     options.transparency = !options.transparency;
                     break;
-                    default: break;
+                default:
+                    break;
                 }
             }
         }
         frameTimer.start;
-        auto pixelData = getPixels(options).map!PackedPixelRGBA.array.ptr;
-        writefln("pixel time = %s", frameTimer.peek);
-        SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(pixelData,
-                width, height, 32, cast(int)(width * uint.sizeof), 0xFF000000,
-                0x00FF0000, 0x0000FF00, 0x000000FF);
+        foreach (color; getPixels(options))
+        {
+            buffer[color[0]] = PackedPixelRGBA(color[1]);
+        }
+        
+        auto pixelData = buffer.ptr;
+        SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(pixelData, width, height, 32,
+                cast(int)(width * uint.sizeof), 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+
         if (surface == null)
         {
             writefln("SDL_CreateRGBSurfaceFrom Error: %s", SDL_GetError());

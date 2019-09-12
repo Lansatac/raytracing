@@ -29,7 +29,13 @@ class Sphere
         emissionColor = ec;
         transparency = transp;
         reflection = refl;
+
+        id = NextID++;
     }
+
+    private static ulong NextID = 1;
+    private ulong id;
+    public ulong ID(){return id;}
 }
 
 struct IntersectionInfo
