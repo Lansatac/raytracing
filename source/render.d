@@ -11,7 +11,7 @@ import gl3n.linalg;
 
 import sphere;
 
-enum MAX_RAY_DEPTH = 2;
+enum MAX_RAY_DEPTH = 3;
 
 
 auto render(Spheres)(const RenderOptions options, const Spheres spheres, uint width, uint height)
@@ -63,26 +63,75 @@ vec3 trace(const RenderOptions options, const vec3 rayorig, const vec3 raydir, c
     auto firstIntersection = intersections.minElement!(intersection => intersection[1].Distance);
 
     const Sphere sphere = firstIntersection[0];
-    float tnear = intersections.front[1].Distance;
+    float tnear = firstIntersection[1].Distance;
 
     vec3 surfaceColor = vec3(0f, 0f, 0f); // color of the ray/surfaceof the object intersected by the ray
     vec3 phit = rayorig + raydir * tnear; // point of intersection
     vec3 nhit = phit - sphere.center; // normal at the intersection point
     nhit.normalize(); // normalize normal direction
 
-    // If the normal and the view direction are not opposite to each other
-    // reverse the normal direction. That also means we are inside the sphere so set
-    // the inside bool to true. Finally reverse the sign of IdotN which we want
-    // positive.
-    float bias = 1e-4; // add some bias to the point from which we will be tracing
-    bool inside = false;
-    if (raydir.dot(nhit) > 0)
+
+    enum float bias = 1e-4; // add some bias to the point from which we will be tracing
+
+    if(options.lighting)
     {
-        nhit = -nhit;
-        inside = true;
-    }
+         // it's a diffuse object, no need to raytrace any further
+
+        auto sphereLights = spheres.filter!(s=>s.emissionColor.x > 0);
+        foreach(light; sphereLights)
+        {
+            vec3 lightDirection = light.center - phit;
+                lightDirection.normalize();
+            auto lightIntersection = intersect(phit + (nhit * bias),
+                            lightDirection, light);
+            if(lightIntersection.Hit)
+            {
+                bool transmission = true;
+
+                float lightDistance = lightIntersection.Distance;
+
+                float closestIntersection = lightDistance;
+                for (uint j = 0; j < spheres.length; ++j)
+                {
+                    if (light != spheres[j])
+                    {
+                        auto intersection = intersect(phit + nhit * bias,
+                                lightDirection, spheres[j]);
+                        if(intersection.Hit && (intersection.Distance < closestIntersection))
+                        {
+                            transmission = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (transmission)
+                {
+                    auto lightIntensity = std.math.fmax(0, nhit.dot(lightDirection));
+                    auto calculatedColor = sphere.surfaceColor.scale(lightIntensity).scale(light.emissionColor);
+                    surfaceColor += calculatedColor;
+                }
+            }
+        }
+     }
+     else
+     {
+         surfaceColor = sphere.surfaceColor;
+     }
+
     if (((sphere.transparency > 0 && options.transparency) || (sphere.reflection > 0 && options.reflections)) && depth < MAX_RAY_DEPTH)
     {
+            // If the normal and the view direction are not opposite to each other
+        // reverse the normal direction. That also means we are inside the sphere so set
+        // the inside bool to true. Finally reverse the sign of IdotN which we want
+        // positive.
+        bool inside = false;
+        if (raydir.dot(nhit) > 0)
+        {
+            nhit = -nhit;
+            inside = true;
+        }
+
         float facingratio = -raydir.dot(nhit);
         // change the mix value to tweak the effect
         float fresneleffect = mix(pow(1 - facingratio, 3), 1, 0.1);
@@ -109,43 +158,8 @@ vec3 trace(const RenderOptions options, const vec3 rayorig, const vec3 raydir, c
         vec3 finalTranslucence = (fresnel + translucence);
         vec3 finalColor = finalTranslucence.scale(sphere.surfaceColor);
         surfaceColor = finalColor;
-    }
-    else if(options.lighting)
-    {
-         // it's a diffuse object, no need to raytrace any further
+    }   
 
-        auto sphereLights = spheres.filter!(s=>s.emissionColor.x > 0);
-        foreach(light; sphereLights)
-        {
-            bool transmission = true;
-            vec3 lightDirection = light.center - phit;
-            lightDirection.normalize();
-            for (uint j = 0; j < spheres.length; ++j)
-            {
-                if (light != spheres[j])
-                {
-                    auto intersection = intersect(phit + nhit * bias,
-                            lightDirection, spheres[j]);
-                    if (intersection.Hit)
-                    {
-                        transmission = false;
-                        break;
-                    }
-                }
-            }
-
-            if (transmission)
-            {
-                auto lightIntensity = std.math.fmax(0, nhit.dot(lightDirection));
-                auto calculatedColor = sphere.surfaceColor.scale(lightIntensity).scale(light.emissionColor);
-                surfaceColor += calculatedColor;
-            }
-        }
-     }
-     else
-     {
-         surfaceColor = sphere.surfaceColor;
-     }
 
     surfaceColor = surfaceColor.clamp01();
     return surfaceColor + sphere.emissionColor;
